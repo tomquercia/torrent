@@ -38,7 +38,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class RUBTClient {
-	
+
 	public static byte[] unKnownMessage;
 	public static byte[] info_hash = new byte[20];
 	public static byte[] peer_id = new byte[20];
@@ -47,7 +47,9 @@ public class RUBTClient {
 	static int bytesDownloaded = 0;
 	static File download;
 	static String peerToUse = null;
+	static String peerToUse2 = null;
 	static int portToUse = 0;
+	static int portToUse2 = 0;
 	static DataOutputStream toPeer = null;
 	static DataInputStream fromPeer = null;
 	static TorrentInfo tor = null;
@@ -61,7 +63,7 @@ public class RUBTClient {
 	static int totalBlocks;
 	public static int[] cur_piece;
 	public static byte[] peer_info_hash = new byte[20];
-	
+
 	public static void main(String argv[]) throws UnknownHostException, IOException, BencodingException{
 		if(argv.length != 2){
 			System.out.println("Error: Invalid number of arguments");
@@ -76,7 +78,7 @@ public class RUBTClient {
 		 * Decoding and processing the metadata of the torrent file
 		 * 
 		 */
-		
+
 		try { //try to open and decode the torrent file
 			download = new File(fileToDownload);
 			tor = new TorrentInfo(readTorrent(torrentFile));
@@ -86,14 +88,14 @@ public class RUBTClient {
 			System.exit(1);
 		}
 		System.out.println("Used TorrentInfo to decode torrent file");
-		
+
 		//generate a 20 digit random string for our peer id
 		Random ran = new Random();
 		int randomNum = ran.nextInt(7777777 - 3333333 + 1) + 3333333;
 		String peerIdentification = "LegendofZelda" + randomNum; //string must be of exactly length 13, plus a random 7 digit number
 		peer_id = peerIdentification.getBytes(); //change the peer id into bytes
 		System.out.println("Made a peer ID" + peerIdentification + " and converted it to bytes");
-		
+
 		blocksInPieces = tor.piece_length/block_length; //calculate the number of blocks in a given piece
 		bytesToDownload = tor.file_length % block_length; //calculate bytes we still need to download
 		totalPieces = bytesToDownload == 0 ? tor.file_length/tor.piece_length:tor.file_length/tor.piece_length + 1; //calculates total pieces to be downloaded
@@ -118,100 +120,100 @@ public class RUBTClient {
 			}
 			++pieceAsWholeCounter;
 		}
-		
-		
-		
+
+
+
 		/*
 		 * 
 		 * Start the connection with the peer 
 		 * 
 		 */
-		
-		
-		
+
+
+
 		talkToTracker(); //contact the tracker to retrieve information
 		System.out.println("Sent STARTING message to tracker");
-		
+
 		try {
 			socket = new Socket(peerToUse, portToUse); //open the socket with the peer
 		} catch (Exception e) {}
-		
+
 		try {
 			toPeer = new DataOutputStream(socket.getOutputStream()); //open data stream to write to peer
 			fromPeer = new DataInputStream(new BufferedInputStream(socket.getInputStream())); //open data stream to accept from peer
 		} catch (Exception e) {}
-		
+
 		//do a handshake with the peer.
 		handshake();
-		
+
 		//get the peer's handshake
 		byte[] peerHandshake = new byte[68];
 		fromPeer.readFully(peerHandshake);
-		
+
 		int tempCounter = 0;
 		while(tempCounter<20) { //put peer's infohash into peer_info_hash 
 			peer_info_hash[tempCounter] = peerHandshake[28+tempCounter];
 			++tempCounter;
 		}
-		
+
 		//check to see if the info hashes are equal
 		if(Arrays.equals(peer_info_hash, info_hash)==false){
 			System.out.println("info hash of peer was not equal to info hash of the torrent metadata");
 			toPeer.close();
 			fromPeer.close();
 		}
-		
+
 		else{
 			System.out.println("HANDSHAKE response from peer was recieved");
 			choke();
 			System.out.println("CHOKE message sent");
 			interested();
 			System.out.println("INTERESTED message sent");
-			
+
 			recieveUnchoke();
-			
-			
+
+
 			/*
 			 * Start requesting, recieving, and processing the pieces
 			 */
-			
-			
-			
+
+
+
 			int requestPieceCounter = 0;
 			int requestBlockCounter = 0;
 			int requestsSent = 0;
 			int intoPieceArrayCounter = 0;
-			
+
 			while(requestPieceCounter < totalPieces){
 				while(requestBlockCounter < blocksInPieces){
-					
+
 					if(bytesToDownload >= block_length){ // if the block to be requested is just the standard block length
 						request(requestPieceCounter,(block_length*requestBlockCounter),block_length);
 						System.out.println("REQUEST message sent");
 						byte[] tempHolding = new byte [block_length];
 						tempHolding = recievePiece();
 						intoPieceArrayCounter = 0;
-						
+
 						while(intoPieceArrayCounter < tempHolding.length){//put the piece from recieve into the array for use by SHA-1 hash compare
 							pieceAsWhole[requestPieceCounter][intoPieceArrayCounter+(block_length*requestBlockCounter)] = tempHolding[intoPieceArrayCounter];
 							++intoPieceArrayCounter;
 						}
-					
+
 						++requestsSent;
 					}
-					
+
 					else if(bytesToDownload<block_length){ // if the data to requested is smaller than the regular block 
 						request(requestPieceCounter,(block_length*requestBlockCounter),bytesToDownload);
 						System.out.println("REQUEST message sent");
 						byte[] tempHolding = new byte [bytesToDownload];
 						tempHolding = recievePiece();
 						intoPieceArrayCounter = 0;
-						
+
 						while(intoPieceArrayCounter < tempHolding.length){//put the piece from recieve into the array for use by SHA-1 hash compare
 							pieceAsWhole[requestPieceCounter][intoPieceArrayCounter+(block_length*requestBlockCounter)] = tempHolding[intoPieceArrayCounter];
 							++intoPieceArrayCounter;
 						}
-						
+
 						++requestsSent;
 					}
 					++requestBlockCounter;
@@ -223,18 +225,18 @@ public class RUBTClient {
 				++requestPieceCounter;
 			}
 			System.out.println("Client sent : " + requestsSent + " requests");
-	
+
 			System.out.println("Bytes remaining to be downloaded : "+bytesToDownload);
-			
-			
+
+
 			/*
 			 * Tell the tracker that we finished the download 
 			 */
-			
-			
+
+
 			int ir = 0;
 			byte[] responseToEnd;
-			 for (ir = 6881; ir <= 6889;) {
+			for (ir = 6881; ir <= 6889;) {
 				try {
 					responseToEnd = getURL(queryGen(ir, 0, bytesDownloaded,bytesToDownload, "completed")); //try to get the response from the tracker
 					port=ir; //bind the port
@@ -245,12 +247,12 @@ public class RUBTClient {
 				}
 			}
 			System.out.println("Sent COMPLETED message to tracker");
-			 
+
 			//write the actual image
 			System.out.println("Writing data to image");
 			bytesToImage();
 			System.out.println("Image created - client now closing connections");
-		
+
 			//close all the connections
 			fromPeer.close();
 			toPeer.close();
@@ -307,6 +309,11 @@ public class RUBTClient {
 				peerToUse = test[v].substring(0,11);
 				portToUse = toInt(test[v].substring(12));
 				System.out.println("IP to connect to : "+peerToUse + "\n"+ "Port to connect to : "+portToUse);
+			}
+			if(test[v].substring(0,11).equals("128.6.171.3")){
+				peerToUse2 = test[v].substring(0,11);
+				portToUse2 = toInt(test[v].substring(12));
+				System.out.println("Secondary IP to connect to : "+peerToUse2+"\n"+"Port to connect to : "+portToUse2);
 			}
 			System.out.println("List of Peers : " + test[v]); //printing out the found peers.
 		}
@@ -394,21 +401,21 @@ public class RUBTClient {
 			toPeer.write(handshakeOut);
 		} catch (Exception e) {}
 	}
-	
+
 	public static void choke(){ //send the CHOKE message
 		byte[] chokeOut = {0x0,0x0,0x0,0x1,0x0};
 		try{
 			toPeer.write(chokeOut);
 		} catch(Exception e) {System.out.println("Error occured with choke, "+ e);}
 	}
-	
+
 	public static void keepAlive(){
 		byte[] keepAliveOut = {0x0,0x0,0x0,0x0};
 		try{
 			toPeer.write(keepAliveOut);
 		} catch(Exception e){}
 	}
-	
+
 	public static void interested(){//send the INTERESTED message
 		byte[] interestedOut = {0x0,0x0,0x0,0x1,0x2};
 		try{
@@ -424,7 +431,7 @@ public class RUBTClient {
 		haveMessage[3] = 0x5;
 		haveMessage[4] = 0x4;
 		byte[] pieceFinishedByteArray = intToByteArray(pieceFinished);
-		
+
 		int haveMessageCounter = 0;
 		while(haveMessageCounter < 4){
 			haveMessage[5 + haveMessageCounter] = pieceFinishedByteArray[haveMessageCounter];
@@ -434,7 +441,7 @@ public class RUBTClient {
 			toPeer.write(haveMessage);
 		} catch(Exception e) {}
 	}
-	
+
 	public static void request(int pieceToRequest, int offsetToRequest, int lengthToRequest){
 		byte[] requestMessage = new byte[17];
 		try{
@@ -443,7 +450,7 @@ public class RUBTClient {
 			requestMessage[2]=0x0;
 			requestMessage[3]=0xd;
 			requestMessage[4]=0x6;
-			
+
 			//add the piece request into the message to send
 			byte[] pieceToRequestByteArray = intToByteArray(pieceToRequest);
 			int requestTempCounter = 0;
@@ -451,7 +458,7 @@ public class RUBTClient {
 				requestMessage[5+requestTempCounter] = pieceToRequestByteArray[requestTempCounter];
 				++requestTempCounter;
 			}
-			
+
 			//add the offset to request to the message
 			byte[] offsetToRequestByteArray = intToByteArray(offsetToRequest);
 			requestTempCounter = 0;
@@ -459,7 +466,7 @@ public class RUBTClient {
 				requestMessage[9+requestTempCounter] = offsetToRequestByteArray[requestTempCounter];
 				++requestTempCounter;
 			}
-			
+
 			//add the requested length
 			byte[] lengthToRequestByteArray = intToByteArray(lengthToRequest);
 			requestTempCounter = 0;
@@ -467,10 +474,10 @@ public class RUBTClient {
 				requestMessage[13+requestTempCounter] = lengthToRequestByteArray[requestTempCounter];
 				++requestTempCounter;
 			}
-			
+
 			//write the actual message
 			toPeer.write(requestMessage);
-			
+
 		} catch(Exception e){System.out.println("Error occured at request" + e);}
 	}
 
@@ -482,35 +489,35 @@ public class RUBTClient {
 		}
 		System.out.println();
 	}*/
-	
+
 	public static void recieveUnchoke(){
 		boolean switchBool = false;
 		byte[] recievingMessage = new byte[5];
 
 		try{
-		while(switchBool == false){
-		recievingMessage[1]= fromPeer.readByte();
-		recievingMessage[1]= fromPeer.readByte();
-		recievingMessage[2]= fromPeer.readByte();
-		recievingMessage[3]= fromPeer.readByte();
-		recievingMessage[4]= fromPeer.readByte();
-		
-		if(recievingMessage[3] == 0x1 && recievingMessage[4] == 0x1){
-			System.out.println("UNCHOKE message recieved");
-			switchBool = true;
-		}
-		
-		else{
-			recievingMessage[0]=recievingMessage[1];
-			recievingMessage[1]=recievingMessage[2];
-			recievingMessage[2]=recievingMessage[3];
-			recievingMessage[3]=recievingMessage[4];
-			recievingMessage[4] = fromPeer.readByte();
-		}
-		}
-	} catch(Exception e){}
+			while(switchBool == false){
+				recievingMessage[1]= fromPeer.readByte();
+				recievingMessage[1]= fromPeer.readByte();
+				recievingMessage[2]= fromPeer.readByte();
+				recievingMessage[3]= fromPeer.readByte();
+				recievingMessage[4]= fromPeer.readByte();
+
+				if(recievingMessage[3] == 0x1 && recievingMessage[4] == 0x1){
+					System.out.println("UNCHOKE message recieved");
+					switchBool = true;
+				}
+
+				else{
+					recievingMessage[0]=recievingMessage[1];
+					recievingMessage[1]=recievingMessage[2];
+					recievingMessage[2]=recievingMessage[3];
+					recievingMessage[3]=recievingMessage[4];
+					recievingMessage[4] = fromPeer.readByte();
+				}
+			}
+		} catch(Exception e){}
 	}
-	
+
 	public static byte[] recievePiece(){
 		boolean switchBool = false;
 		byte first = 0; 
@@ -519,72 +526,72 @@ public class RUBTClient {
 		byte fourth = 0; 
 		byte fifth = 0;
 		byte[] pieceData = null;
-		
-		while(switchBool == false){ //keep looping until the ID byte of the message is found to be 7, indicating an incoming piece
-		try{
-		first = fromPeer.readByte();
-		second = fromPeer.readByte();
-		third = fromPeer.readByte();
-		fourth = fromPeer.readByte();
-		fifth = fromPeer.readByte();
-		}catch(Exception e){System.out.println("error occurred at recieve initial 5 bytes " +e);}
-				
-		if(fifth == 0x7){//when a piece is detected
-			System.out.println("PIECE message recieved");
-			switchBool = true;
-			
-			//seperate out the different parts of the message, offset, index, actual data
-			byte[] messageLength = {first, second, third, fourth};
-			int pieceLength = ByteBuffer.wrap(messageLength).getInt() - 9;
-			pieceData = new byte[pieceLength];
-			byte[] pieceIndex = new byte[4];
-			byte[] pieceOffset = new byte[4];
-			int aTempInt= 0;
-			
-			while(aTempInt<4){//fill in the piece Index
-				try{pieceIndex[aTempInt] = fromPeer.readByte();}catch(Exception e){System.out.println("error occurred at recieve - index " +e);}
-				++aTempInt;
-			}
-			int pieceIndexInt = byteArrayToInt(pieceIndex);
-			
-			aTempInt= 0;
-			while(aTempInt<4){//fill in the piece offset
-				try{pieceOffset[aTempInt] = fromPeer.readByte();}catch(Exception e){System.out.println("error occurred at recieve -offset " +e);}
-				++aTempInt;
-			}
-			int pieceOffsetInt = byteArrayToInt(pieceOffset);
-			
-			aTempInt = 0;
-			while(aTempInt<pieceLength){//get the actual data of the piece
-				try{pieceData[aTempInt] = fromPeer.readByte();}catch(Exception e){System.out.println("error occurred at recieve - data " +e);}
-				++aTempInt;
-			}
-			
-			int transferCounter = 0;
-			while(transferCounter<pieceLength){//transfer the bytes into the download_bytes class array and update the information about bytes in possession
-				
-				download_bytes[(pieceIndexInt*block_length*2)+pieceOffsetInt+transferCounter] = pieceData[transferCounter];
-				++transferCounter;
-				++bytesDownloaded;
-				--bytesToDownload;
-			}
 
-		}
-		else{
-			int tempComputeInt;
-			System.out.println("did not get a piece message");
-			first=second;
-			tempComputeInt = 0;
-			second=third;
-			tempComputeInt = 2;
-			third=fourth;
-			tempComputeInt = 3;
-			fourth=fifth;
-			tempComputeInt = 5;
-			try{fifth = fromPeer.readByte();}catch(Exception e){System.out.println("error occurred at recieve - getting a new byte " +e);}
-			System.out.println("got a new byte");
-			System.out.println("values are now "+first+second+third+fourth+fifth);
-		}
+		while(switchBool == false){ //keep looping until the ID byte of the message is found to be 7, indicating an incoming piece
+			try{
+				first = fromPeer.readByte();
+				second = fromPeer.readByte();
+				third = fromPeer.readByte();
+				fourth = fromPeer.readByte();
+				fifth = fromPeer.readByte();
+			}catch(Exception e){System.out.println("error occurred at recieve initial 5 bytes " +e);}
+
+			if(fifth == 0x7){//when a piece is detected
+				System.out.println("PIECE message recieved");
+				switchBool = true;
+
+				//seperate out the different parts of the message, offset, index, actual data
+				byte[] messageLength = {first, second, third, fourth};
+				int pieceLength = ByteBuffer.wrap(messageLength).getInt() - 9;
+				pieceData = new byte[pieceLength];
+				byte[] pieceIndex = new byte[4];
+				byte[] pieceOffset = new byte[4];
+				int aTempInt= 0;
+
+				while(aTempInt<4){//fill in the piece Index
+					try{pieceIndex[aTempInt] = fromPeer.readByte();}catch(Exception e){System.out.println("error occurred at recieve - index " +e);}
+					++aTempInt;
+				}
+				int pieceIndexInt = byteArrayToInt(pieceIndex);
+
+				aTempInt= 0;
+				while(aTempInt<4){//fill in the piece offset
+					try{pieceOffset[aTempInt] = fromPeer.readByte();}catch(Exception e){System.out.println("error occurred at recieve -offset " +e);}
+					++aTempInt;
+				}
+				int pieceOffsetInt = byteArrayToInt(pieceOffset);
+
+				aTempInt = 0;
+				while(aTempInt<pieceLength){//get the actual data of the piece
+					try{pieceData[aTempInt] = fromPeer.readByte();}catch(Exception e){System.out.println("error occurred at recieve - data " +e);}
+					++aTempInt;
+				}
+
+				int transferCounter = 0;
+				while(transferCounter<pieceLength){//transfer the bytes into the download_bytes class array and update the information about bytes in possession
+
+					download_bytes[(pieceIndexInt*block_length*2)+pieceOffsetInt+transferCounter] = pieceData[transferCounter];
+					++transferCounter;
+					++bytesDownloaded;
+					--bytesToDownload;
+				}
+
+			}
+			else{
+				int tempComputeInt;
+				System.out.println("did not get a piece message");
+				first=second;
+				tempComputeInt = 0;
+				second=third;
+				tempComputeInt = 2;
+				third=fourth;
+				tempComputeInt = 3;
+				fourth=fifth;
+				tempComputeInt = 5;
+				try{fifth = fromPeer.readByte();}catch(Exception e){System.out.println("error occurred at recieve - getting a new byte " +e);}
+				System.out.println("got a new byte");
+				System.out.println("values are now "+first+second+third+fourth+fifth);
+			}
 		}
 		return pieceData;
 	} 
@@ -605,7 +612,7 @@ public class RUBTClient {
 			}
 		}catch(Exception e){System.out.println("an error ocurred when checking the hashes "+e);}
 	}
-	
+
 	public static byte[] intToByteArray(int toByteArray){ //convenience method to make ints into byte arrays
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		DataOutputStream dos = new DataOutputStream(baos);
@@ -613,20 +620,20 @@ public class RUBTClient {
 		byte[] returnMe = baos.toByteArray();
 		return returnMe;
 	}
-	
+
 	public static int byteArrayToInt(byte[] toInt){//convenience method to make byte arrays into ints
-	ByteBuffer convertToInt = ByteBuffer.wrap(toInt);
-	int retAsInt = convertToInt.getInt();
-	return retAsInt;
+		ByteBuffer convertToInt = ByteBuffer.wrap(toInt);
+		int retAsInt = convertToInt.getInt();
+		return retAsInt;
 	}
-	
+
 	public static void bytesToImage(){
 		try{
 			BufferedImage image = ImageIO.read(new ByteArrayInputStream(download_bytes));
 			ImageIO.write(image, "png", download);
 		}catch(Exception e){System.out.println("an error occured writing the bytes to a file "+e);}
 	}
-	
+
 }
 
 
