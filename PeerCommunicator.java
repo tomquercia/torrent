@@ -29,6 +29,10 @@ public class PeerCommunicator implements Runnable {
 		try {
 			data=listener.accept();
 			PeerInterface temp=new PeerInterface(data);
+			Thread thread = new Thread(new Uploader(temp));
+			thread.start();
+			Thread thread2 = new Thread(new PeerCommunicator(this.port));
+			thread2.start();
 		} catch (IOException e) {
 
 		}
