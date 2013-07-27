@@ -2,6 +2,7 @@ package RUBTClient;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -25,6 +26,12 @@ public class PeerCommunicator implements Runnable {
 	@Override
 	public void run() {
 		// TODO Auto-generated method stub
+		try {
+			data=listener.accept();
+			PeerInterface temp=new PeerInterface(data);
+		} catch (IOException e) {
+
+		}
 		
 	}
 	
