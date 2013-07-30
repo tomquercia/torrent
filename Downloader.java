@@ -103,6 +103,7 @@ public class Downloader implements Runnable {
 			while(true /*peer bitfield == null*/){
 				try{
 					//d =***** need to listen for an incoming message here, maybe make receiveUnknownMessage return a MessageInterpreter object?
+					//I've placed a listen function in Uploader, that may be of great use.
 				}
 				catch (Exception e){
 					run();

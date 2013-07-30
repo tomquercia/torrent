@@ -8,7 +8,7 @@ import java.io.OutputStream;
 
 public class MessageInterpreter {
 	byte id;
-	int len;
+	static int len;
 	public static byte keepAlive = -1;
 	public static byte choke = 0;
 	public static byte unchoke = 1;
@@ -173,7 +173,7 @@ public class MessageInterpreter {
 }
 
 
-public MessageInterpreter handle(InputStream input) throws IOException{
+public static MessageInterpreter handle(InputStream input) throws IOException{
 	DataInputStream data = new DataInputStream(input);
 	int messageLength = data.readInt();
 	if(messageLength == 0){
