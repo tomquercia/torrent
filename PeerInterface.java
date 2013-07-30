@@ -23,35 +23,106 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.net.Socket;
+import java.net.ServerSocket;
 
 public class PeerInterface {
 
+	public static int keepAlive = -1;
+	public static int choke = 0;
+	public static int unchoke = 1;
+	public static int interested = 2;
+	public static int notInterested = 3;
+	public static int have = 4;
+	public static int bitfield = 5;
+	public static int request = 6;
+	public static int piece = 7;
+	public static int handshake = 13;
 	static DataOutputStream toPeer = null;
 	static DataInputStream fromPeer = null;
-
+	
 	PeerInterface(Socket connection){
 		try{
 			toPeer = new DataOutputStream(connection.getOutputStream());
 			fromPeer = new DataInputStream(new BufferedInputStream(connection.getInputStream()));
 		}
-		catch (Exception e) {System.out.println("ERROR occured at the PeerInterface constructor when assiging toPeer and fromPeer : " + e);}
+		catch (Exception e) {System.out.println("ERROR occured at the PeerInterface PEER constructor when assiging toPeer and fromPeer : " + e);}
+	}
+	
+	PeerInterface(ServerSocket serverSocket){
+		try{
+			Socket connection = serverSocket.accept();
+			toPeer = new DataOutputStream(connection.getOutputStream());
+			fromPeer = new DataInputStream(new BufferedInputStream(connection.getInputStream()));
+		}
+		catch (Exception e) {System.out.println("ERROR occured at the PeerInterface SERVER constructor when assiging toPeer and fromPeer : " + e);}
 	}
 
 	public static void sendMessage(int messageType){//Overloaded method to send different messages based on messageType
-
+		if(messageType == keepAlive){
+			keepAlive();
+		}
+		else if(messageType == choke){
+			choke();
+		}
+		else if(messageType == unchoke){
+			unchoke();
+		}
+		else if(messageType == interested){
+			interested();
+		}
+		else if(messageType == notInterested){
+			uninterested();
+		}
+		else{
+			System.out.println("Not sure what message type that was, try again with some parameters perhaps?");
+		}
 	}
 
 	public static void sendMessage(int messageType, int pieceToRequestParam, int offsetToRequestParam, int lengthToRequestParam){//should be for request messages
-
+		if(messageType == request){
+			request(pieceToRequestParam, offsetToRequestParam, lengthToRequestParam);
+		}
+		else{
+			System.out.println("something odd happened at SENDMESSAGE() - FOR REQUEST");
+		}
 	}
 
 	public static void sendMessage(int messageType, byte[] info_hashParam, byte[] peer_idParam){//should be for handshakes
-
+		if(messageType == handshake){
+			sendHandshake(info_hashParam, peer_idParam);
+		}
+		else{
+			System.out.println("something odd happened at SENDMESSAGE() - FOR HANDSHAKE");
+		}
 	}
 
 	public static void sendMessage(int messageType, int pieceHaveParam){//should be for have
-
+		if(messageType == have){
+			have(pieceHaveParam);
+		}
+		else{
+			System.out.println("something odd happened at SENDMESSAGE() - FOR HAVE");
+		}
 	}
+
+	public static void sendMessage(int messageType, byte[] bitfieldToSendParam){//for bitfield
+		if(messageType == bitfield){
+			sendBitfield(bitfieldToSendParam);
+		}
+		else{
+			System.out.println("something odd happened at SENDMESSAGE() - FOR BITFIELD");
+		}
+	}
+	
+	public static void sendMessage(int messageType, byte[] indexPieceParam, byte[] beginPieceParam, byte[] pieceToSendDataParam){//for piece message
+		if(messageType == piece){
+			piece(indexPieceParam, beginPieceParam, pieceToSendDataParam);
+		}
+		else{
+			System.out.println("something odd happened at SENDMESSAGE() - FOR PIECE");
+		}
+	}	
+	
 	public static void sendHandshake(byte[] info_hash, byte[] peer_id){ //send the HANDSHAKE message
 		int size = 0;
 		byte handshakeOut[] = new byte[68];
@@ -79,6 +150,13 @@ public class PeerInterface {
 		} catch(Exception e) {System.out.println("Error occured with choke, "+ e);}
 	}
 
+	public static void unchoke(){ //send the UNCHOKE message
+		byte[] unchokeOut = {0x0,0x0,0x0,0x1,0x1};
+		try{
+			toPeer.write(unchokeOut);
+		} catch(Exception e) {System.out.println("Error occured with unchoke, "+ e);}
+	}
+	
 	public static void keepAlive(){//send the KEEPALIVE message
 		byte[] keepAliveOut = {0x0,0x0,0x0,0x0};
 		try{
@@ -93,6 +171,31 @@ public class PeerInterface {
 		} catch(Exception e) {}
 	}
 
+	public static void uninterested(){ //send the UNINTERESTED message
+		byte[] uninterestedOut = {0x0,0x0,0x0,0x1,0x3};
+		try{
+			toPeer.write(uninterestedOut);
+		} catch(Exception e) {System.out.println("Error occured with uninterested, "+ e);}
+	}
+	
+	public static void bitfield(byte[] piecesFinished){//send BITFIELD message
+		byte[] bitfieldOut = new byte[piecesFinished.length+5];
+		byte[] bitfieldLenArray = RUBTUtilities.intToByteArray(piecesFinished.length + 1);
+		bitfieldOut[0] = bitfieldLenArray[0];
+		bitfieldOut[1] = bitfieldLenArray[1];
+		bitfieldOut[2] = bitfieldLenArray[2];
+		bitfieldOut[3] = bitfieldLenArray[3];
+		bitfieldOut[4] = 0x5;
+		int bitfieldCounter = 0;
+		while(bitfieldCounter<piecesFinished.length){
+			bitfieldOut[5+bitfieldCounter]=piecesFinished[bitfieldCounter];
+			++bitfieldCounter;
+		}
+		try{
+			toPeer.write(bitfieldOut);
+		} catch(Exception e) {System.out.println("Error occured with bitfield, "+ e);}
+	}
+	
 	public static void have(int pieceFinished){//send the HAVE message
 		byte[] haveMessage = new byte[9];
 		haveMessage[0] = 0x0;
@@ -100,7 +203,7 @@ public class PeerInterface {
 		haveMessage[2] = 0x0;
 		haveMessage[3] = 0x5;
 		haveMessage[4] = 0x4;
-		byte[] pieceFinishedByteArray = intToByteArray(pieceFinished);
+		byte[] pieceFinishedByteArray = RUBTUtilities.intToByteArray(pieceFinished);
 
 		int haveMessageCounter = 0;
 		while(haveMessageCounter < 4){
@@ -122,7 +225,7 @@ public class PeerInterface {
 			requestMessage[4]=0x6;
 
 			//add the piece request into the message to send
-			byte[] pieceToRequestByteArray = intToByteArray(pieceToRequest);
+			byte[] pieceToRequestByteArray = RUBTUtilities.intToByteArray(pieceToRequest);
 			int requestTempCounter = 0;
 			while(requestTempCounter < 4){
 				requestMessage[5+requestTempCounter] = pieceToRequestByteArray[requestTempCounter];
@@ -130,7 +233,7 @@ public class PeerInterface {
 			}
 
 			//add the offset to request to the message
-			byte[] offsetToRequestByteArray = intToByteArray(offsetToRequest);
+			byte[] offsetToRequestByteArray = RUBTUtilities.intToByteArray(offsetToRequest);
 			requestTempCounter = 0;
 			while(requestTempCounter < 4){
 				requestMessage[9+requestTempCounter] = offsetToRequestByteArray[requestTempCounter];
@@ -138,7 +241,7 @@ public class PeerInterface {
 			}
 
 			//add the requested length
-			byte[] lengthToRequestByteArray = intToByteArray(lengthToRequest);
+			byte[] lengthToRequestByteArray = RUBTUtilities.intToByteArray(lengthToRequest);
 			requestTempCounter = 0;
 			while(requestTempCounter < 4){
 				requestMessage[13+requestTempCounter] = lengthToRequestByteArray[requestTempCounter];
@@ -151,6 +254,32 @@ public class PeerInterface {
 		} catch(Exception e){System.out.println("Error occured at request" + e);}
 	}
 
+	public static void piece(byte[] index, byte[] begin, byte[] pieceToSend){
+		byte[] pieceOut = new byte[pieceToSend.length + 13];
+		byte[] pieceOutLength = RUBTUtilities.intToByteArray(pieceToSend.length + 13);
+		pieceOut[0] = pieceOutLength[0];
+		pieceOut[1] = pieceOutLength[1];
+		pieceOut[2] = pieceOutLength[2];
+		pieceOut[3] = pieceOutLength[3];
+		pieceOut[4] = 0x7;
+		pieceOut[5] = index[0];
+		pieceOut[6] = index[1];
+		pieceOut[7] = index[2];
+		pieceOut[8] = index[3];
+		pieceOut[9] = begin[0];
+		pieceOut[10] = begin[1];
+		pieceOut[11] = begin[2];
+		pieceOut[12] = begin[3];
+		int pieceCounter = 0;
+		while(pieceCounter < pieceToSend.length){
+			pieceOut[13+pieceCounter] = pieceToSend[pieceCounter];
+			++pieceCounter;
+		}
+		try{
+			toPeer.write(pieceOut);
+		} catch(Exception e) {System.out.println("Error occured at piece message " + e);}
+	}
+	
 	public static void recieveUnknownMessage(){//NEEDS WORK, CREATE A MESSAGE IDENTIFIER WHICH RUNS A DIFFERENT FUNCTION BASED ON RECIEVED MESSAGE
 
 	}
@@ -237,7 +366,7 @@ public class PeerInterface {
 					}catch(Exception e){System.out.println("error occurred at recieve - index " +e);}
 					++aTempInt;
 				}
-				int pieceIndexInt = byteArrayToInt(pieceIndex);
+				int pieceIndexInt = RUBTUtilities.byteArrayToInt(pieceIndex);
 
 				aTempInt= 0;
 				while(aTempInt<4){//fill in the piece offset
@@ -246,7 +375,7 @@ public class PeerInterface {
 					}catch(Exception e){System.out.println("error occurred at recieve -offset " +e);}
 					++aTempInt;
 				}
-				int pieceOffsetInt = byteArrayToInt(pieceOffset);
+				int pieceOffsetInt = RUBTUtilities.byteArrayToInt(pieceOffset);
 
 				aTempInt = 0;
 				while(aTempInt<pieceLength){//get the actual data of the piece
@@ -262,7 +391,7 @@ public class PeerInterface {
 					++bytesDownloaded;
 				}
 
-				byte[] bytesDownloadedArray = intToByteArray(bytesDownloaded);
+				byte[] bytesDownloadedArray = RUBTUtilities.intToByteArray(bytesDownloaded);
 
 				aTempInt = 0;
 				while(aTempInt < bytesDownloadedArray.length){
@@ -292,28 +421,4 @@ public class PeerInterface {
 		return pieceData;
 	}
 
-	/*public static void arrayValuePrinter(byte[] toPrint){ // a convenience method to print out all the values in a byte array
-    int tempInt2 = 0;
-    while(tempInt2<toPrint.length){
-      System.out.print(toPrint[tempInt2]);
-      ++tempInt2;
-    }
-    System.out.println();
-  }*/
-
-	public static byte[] intToByteArray(int toByteArray){ //convenience method to make ints into byte arrays
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		DataOutputStream dos = new DataOutputStream(baos);
-		try{
-			dos.writeInt(toByteArray);
-		}catch(Exception e){System.out.println("error occured with the in to byte array converter "+e);}
-		byte[] returnMe = baos.toByteArray();
-		return returnMe;
-	}
-
-	public static int byteArrayToInt(byte[] toInt){//convenience method to make byte arrays into ints
-		ByteBuffer convertToInt = ByteBuffer.wrap(toInt);
-		int retAsInt = convertToInt.getInt();
-		return retAsInt;
-	}
 }
