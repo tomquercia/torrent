@@ -8,7 +8,7 @@ import RUBTClient.PeerInterface;
 public class Downloader implements Runnable {
 	public String download_ip = null;
 	public int download_port = 0;
-
+	public byte[] bitfieldEntries = {0,0,0,0,0};
 	public Downloader(String ip, int port){
 		download_ip = ip;
 		download_port = port;
@@ -91,14 +91,13 @@ public class Downloader implements Runnable {
 		} catch (Exception e) {
 		}
 		PeerInterface down = new PeerInterface(connection);
-		PeerInterface.sendHandshake(RUBTClient.info_hash, RUBTClient.peer_id);
-		if (!PeerInterface.recieveHandshake().equals(RUBTClient.info_hash)){
+		down.sendHandshake(RUBTClient.info_hash, RUBTClient.peer_id);
+		if (!down.recieveHandshake().equals(RUBTClient.info_hash)){
 			System.out.println("Handshake was unsuccessful");
 			return;
 		}
 		else{
-		//PeerInterface.sendBitField(); send the bitfield
-			//now we need their bitfield
+		down.sendMessage(5, bitfieldEntries); //send the bitfield
 			MessageInterpreter d = null;
 			while(true /*peer bitfield == null*/){
 				try{
@@ -111,11 +110,74 @@ public class Downloader implements Runnable {
 				}
 				interpret(d);
 			}
+
+			//make an array to store the pieces seperately for use by the SHA-1 hash check
+			int pieceAsWholeCounter = 0;
+			int copyOfBytesToDownload = bytesToDownload;
+			byte[][] pieceAsWhole = new byte[totalPieces][];
+			while(pieceAsWholeCounter < totalPieces){
+				if(copyOfBytesToDownload - (blocksInPieces*block_length)>-1){
+					pieceAsWhole[pieceAsWholeCounter] = new byte[blocksInPieces*block_length];
+					copyOfBytesToDownload = copyOfBytesToDownload - (blocksInPieces*block_length);
+				}
+				else if(copyOfBytesToDownload - (blocksInPieces*block_length) < 0){
+					copyOfBytesToDownload = copyOfBytesToDownload - (block_length*(blocksInPieces-1));
+					pieceAsWhole[pieceAsWholeCounter] = new byte[copyOfBytesToDownload + (block_length*(blocksInPieces-1))];
+				}
+				++pieceAsWholeCounter;
+			}
+
+			
 			//now check if they are interested, listen for something from the peer, set it to 'd', then kick it out to interpret(d)
-			//Then do the whole downloading dance right here, checking for blocks, and all the bells and whistles
-			//make sure you sleep occasionally to avoid clogging up one peer for too much time.
-			
-			
+			int requestPieceCounter = 0;
+			int requestBlockCounter = 0;
+			int requestsSent = 0;
+			int intoPieceArrayCounter = 0;
+
+			while(requestPieceCounter < totalPieces){
+				while(requestBlockCounter < blocksInPieces){
+
+					if(bytesToDownload >= block_length){ // if the block to be requested is just the standard block length
+						request(requestPieceCounter,(block_length*requestBlockCounter),block_length);
+						System.out.println("REQUEST message sent");
+						byte[] tempHolding = new byte [block_length];
+						tempHolding = recievePiece();
+						intoPieceArrayCounter = 0;
+
+						while(intoPieceArrayCounter < tempHolding.length){//put the piece from recieve into the array for use by SHA-1 hash compare
+							pieceAsWhole[requestPieceCounter][intoPieceArrayCounter+(block_length*requestBlockCounter)] = tempHolding[intoPieceArrayCounter];
+							++intoPieceArrayCounter;
+						}
+
+						++requestsSent;
+					}
+
+					else if(bytesToDownload<block_length){ // if the data to requested is smaller than the regular block 
+						request(requestPieceCounter,(block_length*requestBlockCounter),bytesToDownload);
+						System.out.println("REQUEST message sent");
+						byte[] tempHolding = new byte [bytesToDownload];
+						tempHolding = recievePiece();
+						intoPieceArrayCounter = 0;
+
+						while(intoPieceArrayCounter < tempHolding.length){//put the piece from recieve into the array for use by SHA-1 hash compare
+							pieceAsWhole[requestPieceCounter][intoPieceArrayCounter+(block_length*requestBlockCounter)] = tempHolding[intoPieceArrayCounter];
+							++intoPieceArrayCounter;
+						}
+
+						++requestsSent;
+					}
+					++requestBlockCounter;
+				}
+				requestBlockCounter = 0;
+				checkHash(pieceAsWhole[requestPieceCounter], requestPieceCounter);
+				have(requestPieceCounter);
+				System.out.println("HAVE message sent");
+				++requestPieceCounter;
+			}
+			System.out.println("Client sent : " + requestsSent + " requests");
+
+			System.out.println("Bytes remaining to be downloaded : "+bytesToDownload);
+				
 			
 		}
 	}
