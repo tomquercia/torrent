@@ -7,9 +7,17 @@ public class Uploader implements Runnable {
 	PeerInterface peer;
 	boolean choked=false;
 	boolean interest=true;
-
+	boolean shouldHandshake = true;
 	public Uploader(PeerInterface pi){
 		peer=pi;
+	}
+
+	public Uploader(PeerInterface p, boolean handshake) {
+
+		peer = p;
+
+	shouldHandshake = handshake;
+
 	}
 
 	public MessageInterpreter listen(){
@@ -25,6 +33,17 @@ public class Uploader implements Runnable {
 	@Override
 	public void run() {
 		// TODO Auto-generated method stub
+
+		if (shouldHandshake) {
+			if (!peer.receiveHandshake.equals(RUBTClient.info_hash)) {
+			peer.sendHandshake(RUBTClient.peerId, RUBTClient.info_hash);
+			try {
+				Message.encode(peer.toPeer,
+						new BitfieldMessage(RUBTClient.bitfield));
+			} catch (Exception e) {}
+		}
+
+		
 		while (interest) {
 			MessageInterpreter temp = listen();
 			if(temp == null){
