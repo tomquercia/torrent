@@ -7,11 +7,11 @@ public class Uploader implements Runnable {
 	PeerInterface peer;
 	boolean choked=false;
 	boolean interest=true;
-	boolean shouldHandshake = true;
+	boolean shouldHandshake=true;
+
 	public Uploader(PeerInterface pi){
 		peer=pi;
 	}
-
 	public Uploader(PeerInterface p, boolean handshake) {
 
 		peer = p;
@@ -33,17 +33,15 @@ public class Uploader implements Runnable {
 	@Override
 	public void run() {
 		// TODO Auto-generated method stub
-
 		if (shouldHandshake) {
-			if (!peer.receiveHandshake.equals(RUBTClient.info_hash)) {
-			peer.sendHandshake(RUBTClient.peerId, RUBTClient.info_hash);
+			if (!PeerInterface.recieveHandshake().equals(RUBTClient.info_hash)) {
+			peer.sendHandshake(RUBTClient.peer_id, RUBTClient.info_hash);
 			try {
-				Message.encode(peer.toPeer,
-						new BitfieldMessage(RUBTClient.bitfield));
+				MessageInterpreter.encode(peer.toPeer,
+						new BitfieldMessage(RUBTClient.bitfield()));
 			} catch (Exception e) {}
 		}
-
-		
+		}
 		while (interest) {
 			MessageInterpreter temp = listen();
 			if(temp == null){
@@ -57,6 +55,7 @@ public class Uploader implements Runnable {
 			if(temp.getId()==MessageInterpreter.bitfield){
 				BitfieldMessage bfm = (BitfieldMessage) temp;
 				//set the peer's bitfield
+				//Like this??? peer.bitfield=RUBTClient.convertbool(bfm.getData());
 				break;
 			}
 			else if(temp.getId()==MessageInterpreter.keepAlive){
@@ -76,6 +75,7 @@ public class Uploader implements Runnable {
 				//we got a have message
 				HaveMessage tempHave = (HaveMessage) temp;
 				//update the bitfield
+				//Like this??? peer.bitfield[tempHave.getPieceIndex()]=true;
 				break;
 			}
 			else if(temp.getId()==MessageInterpreter.interested){
@@ -95,13 +95,16 @@ public class Uploader implements Runnable {
 				//got a request for a piece!!!
 				RequestMessage tempRequest = (RequestMessage) temp;
 				byte[] data = new byte[tempRequest.getBlockLength()];
-				//need some way to generate the bytes at the beginning of the tempRequest message, right?
+				byte[]tempbytes = RUBTClient.getPiece(tempRequest.getPieceIndex());
+				System.arraycopy(tempbytes, tempRequest.getBegin(), data, 0,
+						tempRequest.getBlockLength());
 				PieceMessage toSend = new PieceMessage(
 						tempRequest.getPieceIndex(), tempRequest.getBegin(),
 						data);
 				try {
 					//how are we keeping track of what we've sent out?
 					MessageInterpreter.encode(peer.toPeer, toSend);
+					RUBTClient.addUploaded(toSend.getBlockLength());
 				} catch (Exception e) {
 				}
 				break;

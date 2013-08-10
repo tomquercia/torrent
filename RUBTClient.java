@@ -32,6 +32,8 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Random;
 import java.util.Arrays;
+import java.util.StringTokenizer;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.awt.image.*;
 import javax.imageio.ImageIO;
 import java.security.MessageDigest;
@@ -280,7 +282,9 @@ public class RUBTClient {
 						peers.get() & 0xff,
 						peers.get() & 0xff,
 						peers.get() & 0xff);
-				int port = peers.get() * 256 + peers.get();
+				int firstByte = (0x000000FF & ((int)peers.get()));
+	               int secondByte = (0x000000FF & ((int)peers.get()));
+	               int port  = (firstByte << 8 | secondByte);
 				peerURLs.add(ip + ":" + port);
 			}
 		} catch (BufferUnderflowException e) {
@@ -612,6 +616,81 @@ public class RUBTClient {
 			}
 		}catch(Exception e){System.out.println("an error ocurred when checking the hashes "+e);}
 	}
+	public static byte[] bitfield() {
+		return convertbool(convertint(cur_piece));
+	}
+	public static boolean[] convertint(int[] ints) {
+		boolean[] retVal = new boolean[ints.length];
+		for (int i = 0; i < ints.length; i++) {
+			boolean val = false;
+			if (ints[i] == 1) {
+				val = true;
+			}
+			retVal[i] = val;
+		}
+
+		return retVal;
+	}
+	public static byte[] convertbool(boolean[] bools) {
+		int length = bools.length / 8;
+		int mod = bools.length % 8;
+		if (mod != 0) {
+			length = length + 1;
+		}
+		byte[] retVal = new byte[length];
+		int boolIndex = 0;
+		for (int byteIndex = 0; byteIndex < retVal.length; ++byteIndex) {
+			for (int bitIndex = 7; bitIndex >= 0; --bitIndex) {
+				if (boolIndex >= bools.length) {
+					return retVal;
+				}
+				if (bools[boolIndex++]) {
+					retVal[byteIndex] |= (byte) (1 << bitIndex);
+				}
+			}
+		}
+
+		return retVal;
+	}
+	public static byte[] getPiece(int i) {
+		byte[] block = new byte[block_length];
+		byte[] piece = new byte[blocksInPieces * block_length];
+		int check = 0;
+		// get only the blocks in piece i
+		File dir = new File("blocks");
+		for (File file : dir.listFiles()) {
+			StringTokenizer st = new StringTokenizer(file.getName());
+			int p = 0;
+			try {
+				p = Integer.parseInt(st.nextToken());
+			} catch (Exception e) {
+				continue;
+			}
+
+			if (p == i) {
+				check++;
+				int b = Integer.parseInt(st.nextToken());
+
+				if ((i == totalPieces - 1)) {
+					block = new byte[bytesToDownload];
+				}
+
+				try {
+					RandomAccessFile r = new RandomAccessFile("blocks/"
+							+ file.getName(), "r");
+					r.read(block);
+					System.arraycopy(block, 0, piece, block_length * b,
+							block.length);
+					r.close();
+				} catch (Exception e) {
+				}
+			}
+		}
+
+
+			return piece;
+	}
+	
 
 	public static byte[] intToByteArray(int toByteArray){ //convenience method to make ints into byte arrays
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
