@@ -1,0 +1,40 @@
+package RUBTClient;
+
+import java.io.*;
+import java.nio.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class FileHandler {
+	
+	byte[] fileData;
+	byte[] piecesHeld;
+	Path localPath;
+	int localPiecesInFile;
+	
+	public FileHandler(Path filePath, int piecesInFile, int bytesToDownload){
+		fileData = new byte[bytesToDownload];
+		piecesHeld = new byte[piecesInFile];
+		if(filePath != null){
+			try{
+				fileData = Files.readAllBytes(filePath);
+			}catch(Exception e){System.out.println("error occured when reading from saved data " + e);}
+		}
+	}
+	public void writeToFile(byte[] pieceData, int piece, int pieceLength){
+		
+		int tempCounter =0;
+		while(tempCounter < pieceData.length){
+			fileData[(piece*pieceLength) + tempCounter] = pieceData[tempCounter];
+			++tempCounter;
+		}
+		piecesHeld[piece] = 0x1;
+		try{
+			Files.write(localPath, fileData);
+		}catch(Exception e){System.out.println("error occurred when writing data to file " + e);}
+	}
+	public byte[] getSavedPiecesBitfield(){
+		return piecesHeld;
+	}
+	
+}
