@@ -1,0 +1,73 @@
+package RUBTClient;
+
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.nio.ByteBuffer;
+
+public class RUBTUtilities {
+
+	public static int toInt(String s){ //convenience method to convert strings to ints
+		int ret = Integer.parseInt(s);
+		return ret;
+	}
+	
+	public static void arrayValuePrinter(byte[] toPrint){ // a convenience method to print out all the values in a byte array
+	int tempInt2 = 0;
+	while(tempInt2<toPrint.length){
+		System.out.print(toPrint[tempInt2]);
+		++tempInt2;
+	}
+	System.out.println();
+	}
+
+	public static byte[] intToByteArray(int toByteArray){ //convenience method to make ints into byte arrays
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		DataOutputStream dos = new DataOutputStream(baos);
+		try{dos.writeInt(toByteArray);}catch(Exception e){System.out.println("error occured with the in to byte array converter "+e);}
+		byte[] returnMe = baos.toByteArray();
+		return returnMe;
+	}
+
+	public static int byteArrayToInt(byte[] toInt){//convenience method to make byte arrays into ints
+		ByteBuffer convertToInt = ByteBuffer.wrap(toInt);
+		int retAsInt = convertToInt.getInt();
+		return retAsInt;
+	}
+	
+	public static boolean[] convertint(int[] ints) {
+		boolean[] retVal = new boolean[ints.length];
+		for (int i = 0; i < ints.length; i++) {
+			boolean val = false;
+			if (ints[i] == 1) {
+				val = true;
+			}
+			retVal[i] = val;
+		}
+
+		return retVal;
+	}
+
+	public static byte[] convertbool(boolean[] bools) {
+		int length = bools.length / 8;
+		int mod = bools.length % 8;
+		if (mod != 0) {
+			length = length + 1;
+		}
+		byte[] retVal = new byte[length];
+		int boolIndex = 0;
+		for (int byteIndex = 0; byteIndex < retVal.length; ++byteIndex) {
+			for (int bitIndex = 7; bitIndex >= 0; --bitIndex) {
+				if (boolIndex >= bools.length) {
+					return retVal;
+				}
+				if (bools[boolIndex++]) {
+					retVal[byteIndex] |= (byte) (1 << bitIndex);
+				}
+			}
+		}
+
+		return retVal;
+	}
+
+	
+}
